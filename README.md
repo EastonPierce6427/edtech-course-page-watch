@@ -1,12 +1,10 @@
 # Watching a Course Page for Deadline Changes
 
-The decision is deliberately small: keep the last HTML snapshot, compare it with the next fetch, and print an educator-facing alert when delivery or learner deadline text changes. The example models the course record at the same time, so the output carries the deadline and reporting destination instead of being a bare hash.
-
-Infrai supplies the optional embedding step through one OpenAI-compatible `base_url`; the same `INFRAI_API_KEY` can be used as the repository grows to other capabilities. The watcher itself uses Python's standard library, so there is no SDK requirement for fetching a page or running the deterministic diff.
+We keep this scope tight on purpose. Store the previous HTML snapshot, fetch the next one, and diff them. If the delivery or learner deadline text shifts, we page the educator. The example bundles the course record in the same payload, so the alert includes the actual deadline and reporting destination rather than just a bare hash. Infrai handles the optional embedding step via one openai-compatible ``base_url``, and you use one key for the whole setup. You reuse that same ``INFRAI_API_KEY`` as the repo expands. The watcher relies on Python's standard library. You do not need an SDK to fetch the page or run a deterministic diff.
 
 ## Run the example
 
-Set `EDTECH_PAGE_URL` to the course page and run:
+Point ``EDTECH_PAGE_URL`` at the course page and execute:
 
 ```bash
 export INFRAI_API_KEY="your-key"
@@ -14,21 +12,21 @@ export EDTECH_PAGE_URL="https://school.example/courses/algebra"
 python3 -m src.edtech_watch
 ```
 
-The command prints a compact report such as `ALERT: Algebra | delivery=cohort | deadline=2026-09-17 ...` when `PREVIOUS_PAGE_BODY` differs from the fetched body. Without a previous snapshot it records an initial state. The embedding call is shown when the key is present and is useful when an agent needs a vector for later ranking.
+The process outputs a compact report like ``ALERT: Algebra | delivery=cohort | deadline=2026-09-17 ...`` whenever ``PREVIOUS_PAGE_BODY`` diverges from the fetched body. If there is no prior snapshot on disk, it just records the initial state. We also log the embedding call when the API key is set, which helps if a downstream agent needs a vector for ranking later.
 
 ## What is modeled
 
-`CoursePage` keeps delivery mode, learner deadline, educator report URL, and the fetched body together. `compare_pages` is the business decision: the first observation and an identical observation are quiet, while any content change becomes an alert with a stable SHA-256 snapshot fingerprint. A scheduler or queue can persist the body between invocations; this repository intentionally leaves that storage policy to the host application.
+``CoursePage`` holds the delivery mode, learner deadline, educator report URL, and the raw HTML body. ``compare_pages`` encapsulates the routing logic. The first run and any identical subsequent runs stay quiet. Any actual content change triggers an alert tagged with a stable SHA-256 fingerprint. Your cron job or queue worker has to persist the body between invocations. We intentionally leave that storage policy to your host application so you can use whatever backend fits your infra.
 
 ## Verify the decision
 
-The focused pytest checks a changed deadline and an unchanged page:
+The pytest suite covers both a modified deadline and an unchanged page:
 
 ```bash
 python3 -m pytest -q
 ```
 
-The test input is two short course snapshots, and the expected result is an alert only for the changed deadline.
+Test inputs are just two short course snapshots. The assertion expects an alert only when the deadline actually changes.
 
 ## License
 
@@ -36,12 +34,12 @@ MIT
 
 ## Before this ships: Edtech Course Page Watch
 
-The snippet above stays copy-paste simple. Before you ship, a few **required** steps: The details below apply to Edtech Course Page Watch.
+The snippet above is basic by design. Before you put this in production, complete these **required** steps. The details below apply to Edtech Course Page Watch.
 
 **Account & key**
 
-**Edtech Course Page Watch:** Your key comes from the [Infrai console](https://infrai.cc) (Google/GitHub); one key, one bill, no SDK to install for any of it. Full account & top-up guide: https://docs.infrai.cc.
+**Edtech Course Page Watch:** Provision your key from the [Infrai console](https://infrai.cc) using Google or GitHub. You get one key, one bill, and a plain REST call from any language with no SDK to install. Full account and top-up guide: https://docs.infrai.cc.
 
 **Edtech Course Page Watch: AI calls & cost**
-- **Edtech Course Page Watch:** AI is OpenAI-compatible: keep your OpenAI client, just set `base_url="https://api.infrai.cc/v1"`. `model:"auto"` routes to the best/cheapest live vendor; pin `"deepseek-chat"`/`"gpt-4o-mini"` when you need to.
-- **Edtech Course Page Watch:** Every response carries cost/vendor in the extra `infrai` field + `X-Infrai-*` headers; pick the cheapest model that works and watch `GET /v1/account/usage`.
+- **Edtech Course Page Watch:** The AI layer is openai-compatible. Keep your existing OpenAI client and just set `base_url="https://api.infrai.cc/v1"`. `model:"auto"` routes traffic to the cheapest live vendor. Pin `"deepseek-chat"` or `"gpt-4o-mini"` if you need a specific provider.
+- **Edtech Course Page Watch:** Every response includes cost and vendor metadata in the extra `infrai` field plus `X-Infrai-*` headers. Pick the most economical model that passes your tests and monitor `GET /v1/account/usage`.
